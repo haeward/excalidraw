@@ -259,6 +259,7 @@ import type {
   ElementsPendingErasure,
   GenerateDiagramToCode,
   NullableGridSize,
+  Offsets,
 } from "../types";
 import {
   debounce,
@@ -440,6 +441,7 @@ import {
   FlowChartNavigator,
   getLinkDirectionFromKey,
 } from "../element/flowchart";
+import { searchItemInFocusAtom } from "./SearchMenu";
 import type { LocalPoint, Radians } from "../../math";
 import { point, pointDistance, vector } from "../../math";
 
@@ -548,6 +550,7 @@ class App extends React.Component<AppProps, AppState> {
   public scene: Scene;
   public fonts: Fonts;
   public renderer: Renderer;
+  public visibleElements: readonly NonDeletedExcalidrawElement[];
   private resizeObserver: ResizeObserver | undefined;
   private nearestScrollableContainer: HTMLElement | Document | undefined;
   public library: AppClassProperties["library"];
@@ -555,7 +558,7 @@ class App extends React.Component<AppProps, AppState> {
   public id: string;
   private store: Store;
   private history: History;
-  private excalidrawContainerValue: {
+  public excalidrawContainerValue: {
     container: HTMLDivElement | null;
     id: string;
   };
@@ -682,6 +685,7 @@ class App extends React.Component<AppProps, AppState> {
     this.canvas = document.createElement("canvas");
     this.rc = rough.canvas(this.canvas);
     this.renderer = new Renderer(this.scene);
+    this.visibleElements = [];
 
     this.store = new Store();
     this.history = new History();
@@ -1480,6 +1484,7 @@ class App extends React.Component<AppProps, AppState> {
         newElementId: this.state.newElement?.id,
         pendingImageElementId: this.state.pendingImageElementId,
       });
+    this.visibleElements = visibleElements;
 
     const allElementsMap = this.scene.getNonDeletedElementsMap();
 
@@ -2295,6 +2300,9 @@ class App extends React.Component<AppProps, AppState> {
       storeAction: StoreAction.UPDATE,
     });
 
+    // clear the shape and image cache so that any images in initialData
+    // can be loaded fresh
+    this.clearImageShapeCache();
     // FontFaceSet loadingdone event we listen on may not always
     // fire (looking at you Safari), so on init we manually load all
     // fonts and rerender scene text elements once done. This also
@@ -2359,6 +2367,16 @@ class App extends React.Component<AppProps, AppState> {
     }
     return false;
   };
+
+  private clearImageShapeCache(filesMap?: BinaryFiles) {
+    const files = filesMap ?? this.files;
+    this.scene.getNonDeletedElements().forEach((element) => {
+      if (isInitializedImageElement(element) && files[element.fileId]) {
+        this.imageCache.delete(element.fileId);
+        ShapeCache.delete(element);
+      }
+    });
+  }
 
   public async componentDidMount() {
     this.unmounted = false;
@@ -3215,6 +3233,7 @@ class App extends React.Component<AppProps, AppState> {
     if (opts.fitToContent) {
       this.scrollToContent(newElements, {
         fitToContent: true,
+        canvasOffsets: this.getEditorUIOffsets(),
       });
     }
   };
@@ -3527,7 +3546,7 @@ class App extends React.Component<AppProps, AppState> {
     target:
       | ExcalidrawElement
       | readonly ExcalidrawElement[] = this.scene.getNonDeletedElements(),
-    opts?:
+    opts?: (
       | {
           fitToContent?: boolean;
           fitToViewport?: never;
@@ -3544,7 +3563,12 @@ class App extends React.Component<AppProps, AppState> {
           viewportZoomFactor?: number;
           animate?: boolean;
           duration?: number;
-        },
+        }
+    ) & {
+      minZoom?: number;
+      maxZoom?: number;
+      canvasOffsets?: Offsets;
+    },
   ) => {
     this.cancelInProgressAnimation?.();
 
@@ -3557,10 +3581,13 @@ class App extends React.Component<AppProps, AppState> {
 
     if (opts?.fitToContent || opts?.fitToViewport) {
       const { appState } = zoomToFit({
+        canvasOffsets: opts.canvasOffsets,
         targetElements,
         appState: this.state,
         fitToViewport: !!opts?.fitToViewport,
         viewportZoomFactor: opts?.viewportZoomFactor,
+        minZoom: opts?.minZoom,
+        maxZoom: opts?.maxZoom,
       });
       zoom = appState.zoom;
       scrollX = appState.scrollX;
@@ -3674,15 +3701,7 @@ class App extends React.Component<AppProps, AppState> {
 
       this.files = { ...this.files, ...Object.fromEntries(filesMap) };
 
-      this.scene.getNonDeletedElements().forEach((element) => {
-        if (
-          isInitializedImageElement(element) &&
-          filesMap.has(element.fileId)
-        ) {
-          this.imageCache.delete(element.fileId);
-          ShapeCache.delete(element);
-        }
-      });
+      this.clearImageShapeCache(Object.fromEntries(filesMap));
       this.scene.triggerUpdate();
 
       this.addNewImagesToImageCache();
@@ -3796,40 +3815,42 @@ class App extends React.Component<AppProps, AppState> {
     },
   );
 
-  private getEditorUIOffsets = (): {
-    top: number;
-    right: number;
-    bottom: number;
-    left: number;
-  } => {
+  public getEditorUIOffsets = (): Offsets => {
     const toolbarBottom =
       this.excalidrawContainerRef?.current
         ?.querySelector(".App-toolbar")
         ?.getBoundingClientRect()?.bottom ?? 0;
-    const sidebarWidth = Math.max(
-      this.excalidrawContainerRef?.current
-        ?.querySelector(".default-sidebar")
-        ?.getBoundingClientRect()?.width ?? 0,
-    );
-    const propertiesPanelWidth = Math.max(
-      this.excalidrawContainerRef?.current
-        ?.querySelector(".App-menu__left")
-        ?.getBoundingClientRect()?.width ?? 0,
-      0,
-    );
+    const sidebarRect = this.excalidrawContainerRef?.current
+      ?.querySelector(".sidebar")
+      ?.getBoundingClientRect();
+    const propertiesPanelRect = this.excalidrawContainerRef?.current
+      ?.querySelector(".App-menu__left")
+      ?.getBoundingClientRect();
+
+    const PADDING = 16;
 
     return getLanguage().rtl
       ? {
-          top: toolbarBottom,
-          right: propertiesPanelWidth,
-          bottom: 0,
-          left: sidebarWidth,
+          top: toolbarBottom + PADDING,
+          right:
+            Math.max(
+              this.state.width -
+                (propertiesPanelRect?.left ?? this.state.width),
+              0,
+            ) + PADDING,
+          bottom: PADDING,
+          left: Math.max(sidebarRect?.right ?? 0, 0) + PADDING,
         }
       : {
-          top: toolbarBottom,
-          right: sidebarWidth,
-          bottom: 0,
-          left: propertiesPanelWidth,
+          top: toolbarBottom + PADDING,
+          right: Math.max(
+            this.state.width -
+              (sidebarRect?.left ?? this.state.width) +
+              PADDING,
+            0,
+          ),
+          bottom: PADDING,
+          left: Math.max(propertiesPanelRect?.right ?? 0, 0) + PADDING,
         };
   };
 
@@ -3914,7 +3935,7 @@ class App extends React.Component<AppProps, AppState> {
               animate: true,
               duration: 300,
               fitToContent: true,
-              viewportZoomFactor: 0.8,
+              canvasOffsets: this.getEditorUIOffsets(),
             });
           }
 
@@ -3970,6 +3991,7 @@ class App extends React.Component<AppProps, AppState> {
                 this.scrollToContent(nextNode, {
                   animate: true,
                   duration: 300,
+                  canvasOffsets: this.getEditorUIOffsets(),
                 });
               }
             }
@@ -4402,6 +4424,7 @@ class App extends React.Component<AppProps, AppState> {
             this.scrollToContent(firstNode, {
               animate: true,
               duration: 300,
+              canvasOffsets: this.getEditorUIOffsets(),
             });
           }
         }
@@ -5969,6 +5992,16 @@ class App extends React.Component<AppProps, AppState> {
     this.maybeCleanupAfterMissingPointerUp(event.nativeEvent);
     this.maybeUnfollowRemoteUser();
 
+    if (this.state.searchMatches) {
+      this.setState((state) => ({
+        searchMatches: state.searchMatches.map((searchMatch) => ({
+          ...searchMatch,
+          focus: false,
+        })),
+      }));
+      jotaiStore.set(searchItemInFocusAtom, null);
+    }
+
     // since contextMenu options are potentially evaluated on each render,
     // and an contextMenu action may depend on selection state, we must
     // close the contextMenu before we update the selection on pointerDown
@@ -6397,8 +6430,16 @@ class App extends React.Component<AppProps, AppState> {
     }
     isPanning = true;
 
+    // due to event.preventDefault below, container wouldn't get focus
+    // automatically
+    this.focusContainer();
+
+    // preventing defualt while text editing messes with cursor/focus
     if (!this.state.editingTextElement) {
-      // preventing defualt while text editing messes with cursor/focus
+      // necessary to prevent browser from scrolling the page if excalidraw
+      // not full-page #4489
+      //
+      // as such, the above is broken when panning canvas while in wysiwyg
       event.preventDefault();
     }
 

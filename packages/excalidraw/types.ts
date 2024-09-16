@@ -198,6 +198,8 @@ export type InteractiveCanvasAppState = Readonly<
     snapLines: AppState["snapLines"];
     zenModeEnabled: AppState["zenModeEnabled"];
     editingTextElement: AppState["editingTextElement"];
+    // Search matches
+    searchMatches: AppState["searchMatches"];
   }
 >;
 
@@ -384,7 +386,19 @@ export interface AppState {
   userToFollow: UserToFollow | null;
   /** the socket ids of the users following the current user */
   followedBy: Set<SocketId>;
+  searchMatches: readonly SearchMatch[];
 }
+
+type SearchMatch = {
+  id: string;
+  focus: boolean;
+  matchedLines: {
+    offsetX: number;
+    offsetY: number;
+    width: number;
+    height: number;
+  }[];
+};
 
 export type UIAppState = Omit<
   AppState,
@@ -642,6 +656,9 @@ export type AppClassProperties = {
   getEffectiveGridSize: App["getEffectiveGridSize"];
   setPlugins: App["setPlugins"];
   plugins: App["plugins"];
+  getEditorUIOffsets: App["getEditorUIOffsets"];
+  visibleElements: App["visibleElements"];
+  excalidrawContainerValue: App["excalidrawContainerValue"];
 };
 
 export type PointerDownState = Readonly<{
@@ -834,3 +851,10 @@ export type GenerateDiagramToCode = (props: {
   frame: ExcalidrawMagicFrameElement;
   children: readonly ExcalidrawElement[];
 }) => MaybePromise<{ html: string }>;
+
+export type Offsets = Partial<{
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}>;
