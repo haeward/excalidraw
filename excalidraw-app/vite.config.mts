@@ -74,14 +74,7 @@ export default defineConfig({
 
       workbox: {
         // Don't push fonts, locales and wasm to app precache
-        globIgnores: [
-          "fonts.css",
-          "**/locales/**",
-          "service-worker.js",
-          "**/*.wasm-*.js",
-          "XiaolaiMonoSC.ttf",
-          "XiaolaiSC-Regular.ttf"
-        ],
+        globIgnores: ["fonts.css", "**/locales/**", "service-worker.js", "**/*.wasm-*.js"],
         runtimeCaching: [
           {
             urlPattern: new RegExp("/.+.(ttf|woff2|otf)"),

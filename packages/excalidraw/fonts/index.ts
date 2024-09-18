@@ -23,8 +23,6 @@ import Excalifont from "./assets/Excalifont-Regular.woff2";
 import Cascadia from "./assets/CascadiaCode-Regular.woff2";
 import ComicShanns from "./assets/ComicShanns-Regular.woff2";
 import LiberationSans from "./assets/LiberationSans-Regular.woff2";
-import XiaolaiMonoSC from "./assets/XiaolaiMonoSC.ttf";
-import XiaolaiSCRegular from "./assets/XiaolaiSC-Regular.ttf";
 
 import LilitaLatin from "https://fonts.gstatic.com/s/lilitaone/v15/i7dPIFZ9Zz-WBtRtedDbYEF8RXi4EwQ.woff2";
 import LilitaLatinExt from "https://fonts.gstatic.com/s/lilitaone/v15/i7dPIFZ9Zz-WBtRtedDbYE98RXi4EwSsbg.woff2";
@@ -273,14 +271,6 @@ export class Fonts {
         descriptors: { unicodeRange: RANGES.LATIN, weight: "500" },
       },
     );
-
-    _register("XiaolaiMonoSC", FONT_METADATA[FONT_FAMILY.XiaolaiMonoSC], {
-      uri: XiaolaiMonoSC,
-    });
-
-    _register("XiaolaiSC Regular", FONT_METADATA[FONT_FAMILY.XiaolaiSCRegular], {
-      uri: XiaolaiSCRegular,
-    });
 
     Fonts._initialized = true;
 
