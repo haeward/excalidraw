@@ -33,3 +33,17 @@
   style: normal;
   display: swap;
 }
+
+@font-face {
+  font-family: "XiaolaiMonoSC";
+  src: url(./XiaolaiMonoSC.ttf) format("woff2");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "XiaolaiSC Regular";
+  src: url(./XiaolaiSC-Regular.ttf) format("woff2");
+  font-weight: 400;
+  font-style: normal;
+}
